@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>FranceMusic Downloader</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 50px;
+    }
+    .progress-container {
+      display: none;
+      margin-top: 20px;
+    }
+    progress {
+      width: 300px;
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎧 Download YouTube Video or Audio</h1>
+  <form id="download-form">
+    <input type="text" name="url" placeholder="Paste YouTube link here..." required style="width: 300px;">
+    <br><br>
+    <label for="format">🎵 Audio Format:</label>
+    <select name="format" id="format">
+      <option value="mp3">MP3 (audio only)</option>
+      <option value="360p">MP4 360p</option>
+      <option value="720p">MP4 720p</option>
+      <option value="1080p">MP4 1080p</option>
+      <option value="1440p">MP4 1440p</option>
+    </select>
+    <br><br>
+    <button type="submit">Download</button>
+  </form>
+
+  <div class="progress-container" id="progress-container">
+    <p>⏳ Downloading... Please wait <span id="percent">0%</span></p>
+    <progress id="progress-bar" value="0" max="100"></progress>
+  </div>
+
+  <script>
+    const form = document.getElementById("download-form");
+    const progressContainer = document.getElementById("progress-container");
+    const percentText = document.getElementById("percent");
+    const progressBar = document.getElementById("progress-bar");
+
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      progressContainer.style.display = "block";
+      percentText.innerText = "0%";
+      progressBar.value = 0;
+
+      const formData = new FormData(form);
+      const eventSource = new EventSource("/progress");
+
+      eventSource.onmessage = (event) => {
+        const percent = parseFloat(event.data);
+        percentText.innerText = `${percent.toFixed(0)}%`;
+        progressBar.value = percent;
+      };
+
+      const response = await fetch("/download", {
+        method: "POST",
+        body: formData
+      });
+
+      let result = null;
+
+      try {
+        result = await response.json();
+      } catch (err) {
+        eventSource.close();
+        alert("❌ Error: La respuesta del servidor no es válida.");
+        return;
+      }
+
+      if (result && result.file) {
+        const fileToDownload = result.file;
+        eventSource.close();
+        setTimeout(() => {
+          fetch("/fetch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file: fileToDownload })
+          })
+          .then(res => res.blob())
+          .then(blob => {
+            const link = document.createElement("a");
+            link.href = window.URL.createObjectURL(blob);
+            link.download = fileToDownload.split("/").pop();
+            link.click();
+          });
+        }, 1000);
+      } else {
+        eventSource.close();
+        alert("❌ Hubo un error descargando el archivo.");
+      }
+    };
+  </script>
+</body>
+</html>
